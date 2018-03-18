@@ -46,6 +46,7 @@ from `<head image>` replaced with the facial features from `<face image>`.
 import cv2
 import dlib
 import numpy
+import matplotlib.pyplot as plt
 
 import sys
 
@@ -91,14 +92,14 @@ class NoFaces(Exception):
 
 
 def get_landmarks(im):
-    rects = faceCascade.detectMultiScale(
-        im,
-        scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(30, 30),
-        flags=cv2.CASCADE_SCALE_IMAGE
-    )
-    # rects = detector(im, 1)
+    # rects = faceCascade.detectMultiScale(
+    #     im,
+    #     scaleFactor=1.1,
+    #     minNeighbors=5,
+    #     minSize=(30, 30),
+    #     flags=cv2.CASCADE_SCALE_IMAGE
+    # )
+    rects = detector(im, 1)
 
     if len(rects) > 1:
         raise TooManyFaces
@@ -236,5 +237,7 @@ warped_corrected_im2 = correct_colours(im1, warped_im2, landmarks1)
 
 output_im = im1 * (1.0 - combined_mask) + warped_corrected_im2 * combined_mask
 
-cv2.imshow(output_im)
-# cv2.imwrite('output.jpg', output_im)
+cv2.imshow("face", output_im)
+plt.imshow(output_im)
+plt.show()
+cv2.imwrite('output.jpg', output_im)
