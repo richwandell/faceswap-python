@@ -2,6 +2,8 @@ import cv2, dlib
 import numpy as np
 import threading
 
+# poisson blending
+
 PREDICTOR_PATH = "shape_predictor_68_face_landmarks.dat"
 SCALE_FACTOR = 1
 FEATHER_AMOUNT = 11
@@ -60,16 +62,21 @@ def draw_convex_hull(im, points, color):
 
 
 def get_face_mask(im, landmarks):
-    im = np.zeros(im.shape[:2], dtype=np.float64)
+    s = im.shape[:2]
+    im = np.zeros(s, dtype=np.float64)
 
     for group in OVERLAY_POINTS:
+        to_draw = landmarks[group]
+
         draw_convex_hull(im,
-                         landmarks[group],
+                         to_draw,
                          color=1)
 
     im = np.array([im, im, im]).transpose((1, 2, 0))
 
-    im = (cv2.GaussianBlur(im, (FEATHER_AMOUNT, FEATHER_AMOUNT), 0) > 0) * 1.0
+    a = cv2.GaussianBlur(im, (FEATHER_AMOUNT, FEATHER_AMOUNT), 0) > 0
+
+    im = (a) * 1.0
     im = cv2.GaussianBlur(im, (FEATHER_AMOUNT, FEATHER_AMOUNT), 0)
 
     return im
@@ -101,14 +108,17 @@ def transformation_from_points(points1, points2):
     s2 = np.std(points2)
     points1 /= s1
     points2 /= s2
-
-    U, S, Vt = np.linalg.svd(points1.T * points2)
+    t = points1.T
+    mul = t * points2
+    U, S, Vt = np.linalg.svd(mul)
 
     # The R we seek is in fact the transpose of the one given by U * Vt. This
     # is because the above formulation assumes the matrix goes on the right
     # (with row vectors) where as our solution requires the matrix to be on the
     # left (with column vectors).
     R = (U * Vt).T
+
+
 
     return np.vstack([np.hstack(((s2 / s1) * R,
                                        c2.T - (s2 / s1) * R * c1.T)),
@@ -134,6 +144,7 @@ def read_landmarks(im):
 
 if __name__ == "__main__":
     brad_face_image = cv2.imread('brad-face.jpg')
+    my_face_image = cv2.imread('my-face.jpg')
     im2, landmarks2 = read_landmarks(brad_face_image)
 
     video_capture = cv2.VideoCapture(0)
@@ -149,17 +160,32 @@ if __name__ == "__main__":
             M = transformation_from_points(landmarks1[ALIGN_POINTS],
                                            landmarks2[ALIGN_POINTS])
 
-            mask = get_face_mask(im2, landmarks2)
-            warped_mask = warp_im(mask, M, im1.shape)
+            mask1 = get_face_mask(im1, landmarks1)
+            mask2 = get_face_mask(im2, landmarks2)
 
-            combined_mask = np.max([get_face_mask(im1, landmarks1), warped_mask], axis=0)
+            warped_mask2 = warp_im(mask2, M, im1.shape)
 
+            combined_mask = np.max([mask1, warped_mask2], axis=0)
+            # cv2.imwrite('outfile1.jpg', combined_mask)
             warped_im2 = warp_im(im2, M, im1.shape)
             warped_corrected_im2 = correct_colours(im1, warped_im2, landmarks1)
 
-            output_im = im1 * (1.0 - combined_mask) + warped_corrected_im2 * combined_mask
+            omm = 1.0 - combined_mask
+            im1tomm = im1 * omm
+            wim2tcombinedm = warped_corrected_im2 * combined_mask
 
-            cv2.imshow('Video', output_im.astype("uint8"))
+            output_im = im1tomm + wim2tcombinedm
+
+            the_mask = combined_mask[:, :, 1] == 0
+            the_mask = the_mask * 1.0
+            the_mask = the_mask.astype("uint8")
+            andd = cv2.bitwise_not(output_im, output_im, the_mask)
+
+            cv2.imshow('Video', andd.astype("uint8"))
+
+
+
+
         except Exception as e:
             pass
 

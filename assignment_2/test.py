@@ -6,20 +6,22 @@ def getImages(which):
     images = {
         'm': ['samples/m_1_1.jpg', 'samples/m_1_2.jpg', 'samples/m_1_3.jpg'],
         'mountain': ['samples/mountain_1.jpg', 'samples/mountain_2.jpg'],
-        'rm': ['samples/rm1.jpg', 'samples/rm2.jpg', 'samples/rm3.jpg']
+        'rm': ['samples/rm1.jpg', 'samples/rm2.jpg', 'samples/rm3.jpg'],
+        'bryce': ['samples/bryce_left_01.png', 'samples/bryce_right_01.png']
     }
     for im in images[which]:
-        yield cv2.imread(im)
+        image = cv2.imread(im)
+        yield image
 
 
 sift = cv2.xfeatures2d.SIFT_create()
 bf = cv2.BFMatcher()
 
 last_image = None
-for i, image in enumerate(getImages('rm')):
+for i, current_image in enumerate(getImages('m')):
     if i > 0:
-        kp1, des1 = sift.detectAndCompute(last_image, None)
-        kp2, des2 = sift.detectAndCompute(image, None)
+        kp1, des1 = sift.detectAndCompute(current_image, None)
+        kp2, des2 = sift.detectAndCompute(last_image, None)
         matches = bf.knnMatch(des1, des2, k=2)
         good = []
         for m, n in matches:
@@ -30,26 +32,28 @@ for i, image in enumerate(getImages('rm')):
         pts_dst = np.array(list(kp2[m.trainIdx].pt for m in good))
 
         M, mask = cv2.findHomography(pts_src, pts_dst, cv2.RANSAC, 5.0)
+        x = int(M[0][2]) if int(M[0][2]) > 0 else 0
+        y = int(M[1][2]) if int(M[1][2]) > 0 else 0
 
-        w, h = image.shape[:2]
-        # image = cv2.warpPerspective(image, M, (w, h))
+        result = cv2.warpPerspective(
+            current_image,
+            M,
+            (
+                last_image.shape[1] + x,
+                last_image.shape[0] + y
+            )
+        )
 
-        result = cv2.warpPerspective(last_image, M, (last_image.shape[1] + image.shape[1], last_image.shape[0]))
-        result[0:image.shape[0], 0:image.shape[1]] = image
+        result[0:last_image.shape[0], 0:last_image.shape[1]] = last_image
 
-
-        # im3 = last_image.
-
-        # im3 = image.copy()
-        # tmp = cv2.drawMatchesKnn(last_image, kp1, image, kp2, good, im3, flags=2)
 
         cv2.imshow("name", result)
         cv2.waitKey(0)
-
+        last_image = result
 
 
     else:
-        last_image = image
+        last_image = current_image
 
 
 
