@@ -1,11 +1,10 @@
 import cv2, dlib
 import numpy as np
-import threading
 
 # poisson blending
 
 PREDICTOR_PATH = "shape_predictor_68_face_landmarks.dat"
-SCALE_FACTOR = 1
+SCALE_FACTOR = 0.5
 FEATHER_AMOUNT = 11
 FACE_POINTS = list(range(17, 68))
 MOUTH_POINTS = list(range(48, 61))
@@ -29,9 +28,15 @@ predictor = dlib.shape_predictor(PREDICTOR_PATH)
 
 
 def correct_colours(im1, im2, landmarks1):
-    blur_amount = COLOUR_CORRECT_BLUR_FRAC * np.linalg.norm(
-        np.mean(landmarks1[LEFT_EYE_POINTS], axis=0) -
-        np.mean(landmarks1[RIGHT_EYE_POINTS], axis=0))
+    lep = landmarks1[LEFT_EYE_POINTS]
+    rep = landmarks1[RIGHT_EYE_POINTS]
+    left_eye_mean = np.mean(lep, axis=0)
+    right_eye_mean = np.mean(rep, axis=0)
+    mean = left_eye_mean - right_eye_mean
+    norm = np.linalg.norm(mean)
+
+    blur_amount = COLOUR_CORRECT_BLUR_FRAC * norm
+
     blur_amount = int(blur_amount)
     if blur_amount % 2 == 0:
         blur_amount += 1
@@ -126,8 +131,8 @@ def transformation_from_points(points1, points2):
 
 
 def read_landmarks(im):
-    im = cv2.resize(im, (im.shape[1] * SCALE_FACTOR,
-                         im.shape[0] * SCALE_FACTOR))
+    im = cv2.resize(im, (int(im.shape[1] * SCALE_FACTOR),
+                         int(im.shape[0] * SCALE_FACTOR)))
 
     rects = detector(im, 1)
 
@@ -149,7 +154,7 @@ if __name__ == "__main__":
 
     video_capture = cv2.VideoCapture(0)
 
-    thread = threading.Thread()
+
 
     while True:
         # Capture frame-by-frame
@@ -170,20 +175,9 @@ if __name__ == "__main__":
             warped_im2 = warp_im(im2, M, im1.shape)
             warped_corrected_im2 = correct_colours(im1, warped_im2, landmarks1)
 
-            omm = 1.0 - combined_mask
-            im1tomm = im1 * omm
-            wim2tcombinedm = warped_corrected_im2 * combined_mask
+            output_im = im1 * (1.0 - combined_mask) + warped_corrected_im2 * combined_mask
 
-            output_im = im1tomm + wim2tcombinedm
-
-            the_mask = combined_mask[:, :, 1] == 0
-            the_mask = the_mask * 1.0
-            the_mask = the_mask.astype("uint8")
-            andd = cv2.bitwise_not(output_im, output_im, the_mask)
-
-            cv2.imshow('Video', andd.astype("uint8"))
-
-
+            cv2.imshow('Video', output_im.astype("uint8"))
 
 
         except Exception as e:
